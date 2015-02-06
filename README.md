@@ -13,4 +13,4 @@ Then if you want to submit a request, send a JSON post request using something l
 
 The request payload would look something like {"step": "test"}
 
-To check out the result, go into your favourite CLI and use sqlite3 to check out what's been added to your db!
+To check out the result, go into your favourite CLI and use mongo to check out what's been added to your db!
