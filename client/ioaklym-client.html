@@ -1,0 +1,20 @@
+<head>
+  <title>ioaklym-client</title>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>iOaklym - Angle Data</h1>
+    </header>
+  <ul>
+    {{#each steps}}
+      {{> stepangle}}
+    {{/each}}
+  </ul>
+  </div>
+</body>
+
+<template name="stepangle">
+  <li>{{angle}}</li>
+</template>
