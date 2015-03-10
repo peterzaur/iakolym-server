@@ -35,7 +35,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', routes);
 app.use('/steps', steps);
 
-var server = app.listen(3000, function () {
+var server = app.listen(6000, function () {
   var host = server.address().address
   var port = server.address().port
 
