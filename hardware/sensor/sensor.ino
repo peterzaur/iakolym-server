@@ -19,8 +19,8 @@ volatile float twoKi = twoKiDef;					        // 2 * integral gain (Ki)
 volatile float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;		        // quaternion of sensor frame relative to auxiliary frame
 volatile float integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;	// integral error terms scaled by Ki
 
-float gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z, mag_x, mag_y, mag_z    // Variables to hold latest sensor data values
-float yaw                                                                       // Measurements
+float gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z, mag_x, mag_y, mag_z;   // Variables to hold latest sensor data values
+float yaw;                                                                      // Measurements
 
 Adafruit_9DOF dof = Adafruit_9DOF();
 Adafruit_LSM9DS0 lsm = Adafruit_LSM9DS0(1000);  // Use I2C, ID #1000
@@ -49,69 +49,6 @@ void configureSensor(void)
   lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS);
   //lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_500DPS);
   //lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_2000DPS);
-}
-
-/**************************************************************************/
-/*
-    Arduino setup function (automatically called at startup)
-*/
-/**************************************************************************/
-void setup()
-{
-   /* Initialise the sensor */
-  if(!lsm.begin())
-  {
-    /* There was a problem detecting the LSM9DS0 ... check your connections */
-    mySerial.print(F("Ooops, no LSM9DS0 detected ... Check your wiring or I2C ADDR!"));
-    while(1);
-  }
-  mySerial.println(F("Found LSM9DS0 9DOF"));
-  
-  /* Setup the sensor gain and integration time */
-  configureSensor();
-  
-  // Needs a calibration call here - potentially use one at https://learn.adafruit.com/lsm303-accelerometer-slash-compass-breakout/calibration
-  
-  mySerial.begin(9600);
-}
-
-/**************************************************************************/
-/*
-    Arduino loop function, called once 'setup' is complete (your own code
-    should go here)
-*/
-/**************************************************************************/
-void loop()
-{
-
-  while (!mySerial.available());
-  
-  sensors_event_t accel, mag, gyro, temp;
-  lsm.getEvent(&accel, &mag, &gyro, &temp); 
-  
-  // xyz Gyro data, converted to rad/s
-  gyro_x = gyro.gyro.x * PI / 180.0f;
-  gyro_y = gyro.gyro.y * PI / 180.0f;
-  gyro_z = gyro.gyro.z * PI / 180.0f;
-  
-  // xyz accel data, converted to g's
-  accel_x = accel.acceleration.x / 9.81;
-  accel_y = accel.acceleration.y / 9.81;
-  accel_z = accel.acceleration.z / 9.81;
-  
-  // xyz mag
-  mag_x = mag.magnetic.x;
-  mag_y = mag.magnetic.y;
-  mag_z = mag.magnetic.z;
-  
-  MahonyAHRSupdate(gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z, mag_x, mag_y, mag_z);
-  
-  float yaw = atan2(2.0f * (q[1] * q[2] + q[0] * q[3]), q[0] * q[0] + q[1] * q[1] - q[2] * q[2] - q[3] * q[3]);
-  yaw *= 180.0f / PI;
-  
-  mySerial.println(yaw);
-  
-  delay(1000);
 }
 
 /**************************************************************************/
@@ -299,4 +236,67 @@ float invSqrt(float x) {
 	y = *(float*)&i;
 	y = y * (1.5f - (halfx * y * y));
 	return y;
+}
+
+/**************************************************************************/
+/*
+    Arduino setup function (automatically called at startup)
+*/
+/**************************************************************************/
+void setup()
+{
+   /* Initialise the sensor */
+  if(!lsm.begin())
+  {
+    /* There was a problem detecting the LSM9DS0 ... check your connections */
+    mySerial.print(F("Ooops, no LSM9DS0 detected ... Check your wiring or I2C ADDR!"));
+    while(1);
+  }
+  mySerial.println(F("Found LSM9DS0 9DOF"));
+  
+  /* Setup the sensor gain and integration time */
+  configureSensor();
+  
+  // Needs a calibration call here - potentially use one at https://learn.adafruit.com/lsm303-accelerometer-slash-compass-breakout/calibration
+  
+  mySerial.begin(9600);
+}
+
+/**************************************************************************/
+/*
+    Arduino loop function, called once 'setup' is complete (your own code
+    should go here)
+*/
+/**************************************************************************/
+void loop()
+{
+
+  while (!mySerial.available());
+  
+  sensors_event_t accel, mag, gyro, temp;
+  lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  
+  // xyz Gyro data, converted to rad/s
+  gyro_x = gyro.gyro.x * PI / 180.0f;
+  gyro_y = gyro.gyro.y * PI / 180.0f;
+  gyro_z = gyro.gyro.z * PI / 180.0f;
+  
+  // xyz accel data, converted to g's
+  accel_x = accel.acceleration.x / 9.81;
+  accel_y = accel.acceleration.y / 9.81;
+  accel_z = accel.acceleration.z / 9.81;
+  
+  // xyz mag
+  mag_x = mag.magnetic.x;
+  mag_y = mag.magnetic.y;
+  mag_z = mag.magnetic.z;
+  
+  MahonyAHRSupdate(gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z, mag_x, mag_y, mag_z);
+  
+  float yaw = atan2(2.0f * (q1 * q2 + q0 * q3), q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3);
+  yaw *= 180.0f / PI;
+  
+  mySerial.println(yaw);
+  
+  delay(1000);
 }
