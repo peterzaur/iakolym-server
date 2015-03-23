@@ -13,8 +13,9 @@
 #define mySerial Serial1                                                        // RX, TX for BlueTooth
 
 const int analogInPin = A9;                                                     // Use pin 9
-int veloValue = 0;                                                              // Velostate value normally
+int veloValue = 0;                                                              // Velostat value normally
 int onVeloValue = 0;                                                            // Velostat when stepped on
+int LED = 7;
 
 float deltat = 0.0f;                                                            // integration interval for both filter schemes
 uint32_t lastUpdate = 0;                                                        // for integration interval
@@ -32,19 +33,20 @@ float tot_yaw;                                                                  
 
 // Magnetometer hard and soft iron compensation - needs to run the calibration script
 // Reference: http://www.camelsoftware.com/firetail/blog/uavs/3-axis-magnetometer-calibration-a-simple-technique-for-hard-soft-errors/
-float magtot_avg = ((0.60 - ((-1.04 + 0.60)*0.5) + (-1*(-1.04 - ((-1.04 + 0.60)*0.5))))*0.5 +
-                    (0.75 - ((-0.37 + 0.75)*0.5) + (-1*(-0.37 - ((-0.37 + 0.75)*0.5))))*0.5 +
-                    (0.61 - ((-0.36 + 0.61)*0.5) + (-1*(-0.36 - ((-0.36 + 0.61)*0.5))))*0.5)/3;
-float magx_scale = magtot_avg/((0.60 - ((-1.04 + 0.60)*0.5) + (-1*(-1.04 - ((-1.04 + 0.60)*0.5))))*0.5);
-float magy_scale = magtot_avg/((0.75 - ((-0.37 + 0.75)*0.5) + (-1*(-0.37 - ((-0.37 + 0.75)*0.5))))*0.5);
-float magz_scale = magtot_avg/((0.61 - ((-0.36 + 0.61)*0.5) + (-1*(-0.36 - ((-0.36 + 0.61)*0.5))))*0.5);
+float MagMinX, MagMaxX;
+float MagMinY, MagMaxY;
+float MagMinZ, MagMaxZ;
+float magtot_avg;
+float magx_scale;
+float magy_scale;
+float magz_scale;
 
 Adafruit_9DOF dof = Adafruit_9DOF();
 Adafruit_LSM9DS0 lsm = Adafruit_LSM9DS0(1000);  // Use I2C, ID #1000
 
-RunningMedian X_RunningMedian = RunningMedian(13);
-RunningMedian Y_RunningMedian = RunningMedian(13);
-RunningMedian Z_RunningMedian = RunningMedian(13);
+RunningMedian X_RunningMedian = RunningMedian(10);
+RunningMedian Y_RunningMedian = RunningMedian(10);
+RunningMedian Z_RunningMedian = RunningMedian(10);
 /**************************************************************************/
 /*
     Configures the gain and integration time for the TSL2561
@@ -73,7 +75,7 @@ void configureSensor(void)
 
 /**************************************************************************/
 /*
-    Gyro offset calibration
+    Gyro offset calibration and Magnetometer hard / soft iron compensation
 */
 /**************************************************************************/
 
@@ -109,11 +111,46 @@ void offsetCal(){
   
   Serial.print("gz register offset = ");
   Serial.println(gz);
+  
+  Serial.println("Calibrating Magnetometer... move shit");
+  while (millis() < 75000) {
+    if (mag.magnetic.x < MagMinX) MagMinX = mag.magnetic.x;
+    if (mag.magnetic.x > MagMaxX) MagMaxX = mag.magnetic.x;
+    
+    if (mag.magnetic.y < MagMinY) MagMinY = mag.magnetic.y;
+    if (mag.magnetic.y > MagMaxY) MagMaxY = mag.magnetic.y;
+  
+    if (mag.magnetic.z < MagMinZ) MagMinZ = mag.magnetic.z;
+    if (mag.magnetic.z > MagMaxZ) MagMaxZ = mag.magnetic.z;
+    Serial.print(".");
+    digitalWrite(LED, HIGH);
+    delay(100);
+    digitalWrite(LED, LOW);
+  }
+  Serial.println(".");
+  
+  magtot_avg = ((MagMaxX - ((MagMinX + MagMaxX)*0.5) + (-1*(MagMinX - ((MagMinX + MagMaxX)*0.5))))*0.5 + \
+                (MagMaxY - ((MagMinY + MagMaxY)*0.5) + (-1*(MagMinY - ((MagMinY + MagMaxY)*0.5))))*0.5 + \
+                (MagMaxZ - ((MagMinZ + MagMaxZ)*0.5) + (-1*(MagMinZ - ((MagMinZ + MagMaxZ)*0.5))))*0.5)/3;
+  magx_scale = magtot_avg/((MagMaxX - ((MagMinX + MagMaxX)*0.5) + (-1*(MagMinX - ((MagMinX + MagMaxX)*0.5))))*0.5);
+  magy_scale = magtot_avg/((MagMaxY - ((MagMinY + MagMaxY)*0.5) + (-1*(MagMinY - ((MagMinY + MagMaxY)*0.5))))*0.5);
+  magz_scale = magtot_avg/((MagMaxZ - ((MagMinZ + MagMaxZ)*0.5) + (-1*(MagMinZ - ((MagMinZ + MagMaxZ)*0.5))))*0.5);
+  
+  Serial.print("Magnetometer X Scale = ");
+  Serial.println(magx_scale);
+  
+  Serial.print("Magnetometer Y Scale = ");
+  Serial.println(magy_scale);
+  
+  Serial.print("Magnetometer Z Scale = ");
+  Serial.println(magz_scale);
+  
+  
 }
 
 /**************************************************************************/
 /*
-    Gyro offset calibration
+    Velostat offset calibration
 */
 /**************************************************************************/
 
@@ -145,9 +182,10 @@ void offsetVelo(){
 void setup()
 {
   Serial.begin(14400);
-  mySerial.begin(9600);
+//  mySerial.begin(9600);
   
   pinMode(9, INPUT_PULLUP);
+  pinMode(LED, OUTPUT);
   
   /* Initialise the sensor */
   if(!lsm.begin())
@@ -189,9 +227,9 @@ void loop()
   mag_z = mag.magnetic.z;
   
   // Hard iron compensation
-  mag_x -= (-1.04 + 0.60)*0.5;
-  mag_y -= (-0.37 + 0.75)*0.5;
-  mag_z -= (-0.36 + 0.61)*0.5;
+  mag_x -= (MagMinX + MagMaxX)*0.5;
+  mag_y -= (MagMinY + MagMaxY)*0.5;
+  mag_z -= (MagMinZ + MagMinZ)*0.5;
   
   // Soft iron compensation
   mag_x *= magx_scale;
@@ -220,7 +258,7 @@ void loop()
   }
   
   // Use complementary filter for gyro / magnetometer yaw
-  tot_yaw = (0.8f) * (tot_yaw + gyro_z * deltat) + (0.2f) * (mag_yaw);
+  tot_yaw = (0.9f) * (tot_yaw + gyro_z * deltat) + (0.1f) * (mag_yaw);
   
   // Get the time in milliseconds (this goes back to 0 after 50 days apparently)
   Now = millis();
@@ -242,7 +280,7 @@ void loop()
   // if condition is currVeloValue - stepVeloValue < -x
   // set stepVeloValue to currVeloValue, if it's lower than it
   // stop condition when it's a difference of -15 or -20 or something that is beyond drifting limits
-  if (veloValue < -30) {
+  if (veloValue < -90) {
     // onVeloValue not being used?
     onVeloValue = veloValue;
     deltat = ((Now - lastUpdate) / 1000.0f);
@@ -260,9 +298,6 @@ void loop()
   } else {
     swingTimer = swingTimer + 0.1;
   }
-  
-  // For testing
-  mySerial.println(veloValue);
   
   delay(100);
 }
